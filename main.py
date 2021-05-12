@@ -1,5 +1,7 @@
 import requests
 import math
+import os
+import json
 
 jsonrpc_endpoint='http://localhost:8545'
 
@@ -58,24 +60,23 @@ def calc_mcopy_savings(gas_used, mem_size_at_copies):
 
     return (gas_used - new_gas_used) / gas_used
 
-# given an execution trace:
-#   identify cases where MLOAD and MSTORE are called consecutively and used to copy a word of memory
+# given an EVM execution trace:
+#   search for memory copying: case when execution flow is ...,MLOAD,PUSH,MSTORE,...
+#   return estimated savings and information about where copies occuried, EVM memory size at copy
 def parse_trace_mcopy(steps: []):
-    prev_step = None
-    result = []
+    result_memory_size = []
+    result_copies_pcs = []
+    last_two_ops = []
 
-    for step in steps:
-            if step['op'] == 'MSTORE':
-                if prev_step and prev_step['op'] == 'MLOAD':
-                    result.append(len(step['memory']))
+    for idx, step in enumerate(steps):
+            if step['op'] == 'MSTORE' and len(last_two_ops) == 2 and 'PUSH' in last_two_ops[0] and last_two_ops[1] == 'MLOAD':
+                result_memory_size.append(len(step['memory']))
+                result_copies_pcs.append(step['pc'])
 
-            if not 'PUSH' in step['op']:
-                prev_step = step
+            last_two_ops.insert(0, step['op'])
+            last_two_ops = last_two_ops[:2]
 
-    return (steps[0]['gas'] - steps[-1]['gas'], result)
-
-# def trace_tx_history(tracer: EVMTracer, start_block: int, end_block_int):
-#     pass
+    return (steps[0]['gas'] - steps[-1]['gas'], result_memory_size, result_copies_pcs)
 
 def trace_block(block_number: int):
     block = rpc_ethGetBlockByNumber(block_number)
@@ -85,28 +86,33 @@ def trace_block(block_number: int):
 
     result = {}
 
+    print("tracing block ", block_number)
     if len(block['transactions']) > 0:
             for tx_hash in block['transactions']:
                     tx_trace = rpc_debugTraceTransaction(tx_hash)
                     if tx_trace and tx_trace['structLogs'] != []:
-                        gas_used, mem_size_at_copies = parse_trace_mcopy(tx_trace['structLogs'])
+                        gas_used, mem_size_at_copies, pcs_at_copies = parse_trace_mcopy(tx_trace['structLogs'])
                         if mem_size_at_copies:
+                            with open('raw_traces/trace{}.json'.format(tx_hash), 'w') as f:
+                                f.write(json.dumps(tx_trace['structLogs'], sort_keys=True, indent=4))
+
                             result[tx_hash] = {
                                     'gas_used': gas_used,
                                     'mem_size_at_copies': mem_size_at_copies,
+                                    'pcs_at_copies': pcs_at_copies,
                                     'savings': calc_mcopy_savings(gas_used, mem_size_at_copies)}
                             print("found savings of {}%".format(result[tx_hash]['savings'] * 100))
     return result
 
 
-def trace_block_range(start: int, end: int):
+def trace_block_range(output_folder: str, start: int, end: int):
     for block_number in range(start, end+1):
-            trace_block(block_number)
+            block_result = trace_block(block_number)
+            with open(os.path.join(output_folder, "block{}.json".format(block_number)), 'w') as f:
+                f.write(json.dumps(block_result))
 
 def main():
-    # trace_result = trace_tx_history(trace, 10000000, 11000000)
-    # trace_block(1000)
-    trace_block_range(10537502, 10558149)
+    trace_block_range('db', 10537502, 10558149)
 
 if __name__ == "__main__":
         main()
