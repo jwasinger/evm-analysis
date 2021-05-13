@@ -4,6 +4,7 @@ import os
 import json
 
 jsonrpc_endpoint='http://localhost:8545'
+session = requests.Session()
 
 def rpc_ethGetBlockNumber():
         block_num_hex = hex(block)
@@ -13,8 +14,8 @@ def rpc_ethGetBlockNumber():
             'jsonrpc': '2.0',
             "id": 0,
         }
-        response = requests.post(jsonrpc_endpoint, json=payload).json()
-        return response
+        response = session.post(jsonrpc_endpoint, json=payload)
+        return response.json()
 
 def rpc_ethGetBlockByNumber(block: int):
         block_num_hex = hex(block)
@@ -24,8 +25,8 @@ def rpc_ethGetBlockByNumber(block: int):
             'jsonrpc': '2.0',
             "id": 0,
         }
-        response = requests.post(jsonrpc_endpoint, json=payload).json()
-        return response['result']
+        response = session.post(jsonrpc_endpoint, json=payload)
+        return response.json()['result']
 
 def rpc_debugTraceTransaction(tx_hash):
         payload = {
@@ -34,12 +35,12 @@ def rpc_debugTraceTransaction(tx_hash):
             'jsonrpc': '2.0',
             "id": 0,
         }
-        response = requests.post(jsonrpc_endpoint, json=payload).json()
+        response = session.post(jsonrpc_endpoint, json=payload)
 
         if not 'result' in response:
             return None
 
-        return response['result']
+        return response.json()['result']
 
 MCOPY_COST_1WORD = 1
 G_COST_VERYLOW = 3
@@ -93,9 +94,6 @@ def trace_block(block_number: int):
                     if tx_trace and tx_trace['structLogs'] != []:
                         gas_used, mem_size_at_copies, pcs_at_copies = parse_trace_mcopy(tx_trace['structLogs'])
                         if mem_size_at_copies:
-                            with open('raw_traces/trace{}.json'.format(tx_hash), 'w') as f:
-                                f.write(json.dumps(tx_trace['structLogs'], sort_keys=True, indent=4))
-
                             result[tx_hash] = {
                                     'gas_used': gas_used,
                                     'mem_size_at_copies': mem_size_at_copies,
