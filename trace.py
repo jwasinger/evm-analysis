@@ -91,8 +91,15 @@ async def trace_block_range(rpcClient, start: int, end: int):
 async def main():
     uri = "ws://localhost:8546"
 
+    if len(sys.argv) < 3:
+      print("invoke like 'python3 trace.py startblocknum endblocknum'")
+      sys.exit(1)
+
+    start = int(sys.argv[1])
+    end = int(sys.argv[2])
+
     rpcClient = EthRPCClient(uri)
     async with rpcClient:
-        await trace_block_range(rpcClient, 10537502, 10558149)
+        await trace_block_range(rpcClient, start, end)
 
 asyncio.get_event_loop().run_until_complete(main())

@@ -9,7 +9,7 @@ A utility for identifying all EVM memory copies for ranges of past blocks.
 
 * Setup local python env: `pipenv shell`
 
-* Trace block ranges and gather data about memory copying: `python3 trace.py
+* Trace block ranges and gather data about memory copying: `python3 trace.py startblocknumber endblocknumber`
 
 The json trace object reported for each transaction containing memory copies follows the form `[[{"srcOffset": Number, "dstOffset": Number, "srcPC": Number, "dstPC": Number, "address": HexString}, ...], [...], ...]`
 
