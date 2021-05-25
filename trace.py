@@ -38,10 +38,11 @@ def parse_trace_mcopy(steps: []):
     return consecutive_counts 
 
 mcopy_trace_script = ""
-with open("mcopy_tracer.js") as f:
+with open("call_tracer.js") as f:
     mcopy_trace_script = f.read()
 
 def count_consecutive(trace_result):
+        import pdb; pdb.set_trace()
         print(trace_result)
 
 async def trace_block(rpcClient, block_number: int):
@@ -55,15 +56,12 @@ async def trace_block(rpcClient, block_number: int):
     print("block:", block_number)
     if 'transactions' in block and len(block['transactions']) > 0:
             for tx_hash in block['transactions']:
-                    try:
-                            tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
-                            if len(tx_trace['copies']) != 0:
-                                print("tx:", tx_hash)
-                                count_consecutive(tx_trace)
-                                        # print("{},{}".format(tx_hash, [(entry['startPc'], entry['consecutive']) for entry in tx_trace['consecutive_counts']]))
-                    except Exception as e:
-                            print("tx: {}.  error encountered: ".format(tx_hash, e))
-                            continue
+                    tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
+                    import pdb; pdb.set_trace()
+                    if len(tx_trace['copies']) != 0:
+                        print("tx:", tx_hash)
+                        count_consecutive(tx_trace)
+                                # print("{},{}".format(tx_hash, [(entry['startPc'], entry['consecutive']) for entry in tx_trace['consecutive_counts']]))
 
     return result
 
