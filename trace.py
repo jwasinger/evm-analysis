@@ -7,25 +7,6 @@ import sys
 
 from eth_jsonrpc_ws import EthRPCClient
 
-MCOPY_COST_1WORD = 1
-G_COST_VERYLOW = 3
-
-def memory_cost(memory_size):
-    return memory_size * G_COST_VERYLOW + int(math.floor(memory_size ** 2 / 512))
-
-def calc_mcopy_savings(gas_used, mem_size_at_copies):
-    new_gas_used = gas_used
-
-    # TODO: consider case where the copy expands memory
-    for memsize in mem_size_at_copies:
-        # subtract the cost of PUSH + PUSH + MLOAD + PUSH + MSTORE
-        new_gas_used -= memory_cost(memsize) * 2 * G_COST_VERYLOW + G_COST_VERYLOW * 3
-
-        # add cost of MCOPY (PUSH + MCOPY_COST_1WORD)
-        new_gas_used += MCOPY_COST_1WORD + G_COST_VERYLOW
-
-    return (gas_used - new_gas_used) / gas_used
-
 def parse_trace_mcopy(steps: []):
     # lookup of [(pc, offset)]
     mloads = []
@@ -72,14 +53,17 @@ async def trace_block(rpcClient, block_number: int):
     result = {}
 
     print("block:", block_number)
-    if len(block['transactions']) > 0:
+    if 'transactions' in block and len(block['transactions']) > 0:
             for tx_hash in block['transactions']:
-                    tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
-                    if len(tx_trace['copies']) != 0:
-                        print("tx:", tx_hash)
-                        count_consecutive(tx_trace['copies'])
-                                # print("{},{}".format(tx_hash, [(entry['startPc'], entry['consecutive']) for entry in tx_trace['consecutive_counts']]))
-
+                    try:
+                            tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
+                            if len(tx_trace['copies']) != 0:
+                                print("tx:", tx_hash)
+                                count_consecutive(tx_trace)
+                                        # print("{},{}".format(tx_hash, [(entry['startPc'], entry['consecutive']) for entry in tx_trace['consecutive_counts']]))
+                    except Exception as e:
+                            print("tx: {}.  error encountered: ".format(tx_hash, e))
+                            continue
 
     return result
 
