@@ -18,7 +18,7 @@
 // the internal calls made by a transaction, along with any useful information.
 {
 	// callstack is the current recursive call stack of the EVM execution.
-	callstack: [{to: null, memcopyState: {candidates: [], copies: []}}],
+	callstack: [{to: null, memcopyState: {candidates: [], copies: [], prevOp: null}}],
 	hasCopies: false,
 
 	// descended tracks whether we've just descended from an outer transaction into
@@ -105,6 +105,22 @@
 	"SELFDESTRUCT": [-1, 0],
 	"SIGNEXTEND": [-2, 1],
   },
+  deepCopyStack: function(log) {
+	var result = []
+	for (var i = 0; i < log.stack.length(); i++) {
+		result.push(log.stack.peek(i))
+	}
+
+	return result
+  },
+  printStack: function(stack) {
+    console.log("{")
+    for (var i = 0; i < stack.length(); i++) {
+      console.log(stack.peek(i).toString())
+      console.log(",")
+    }
+    console.log("}")
+  },
   stepCandidates: function(callState) {
 	var opName = callState.memcopyState.prevOp.name
 
@@ -112,8 +128,9 @@
 		opName = 'PUSH'
 	}
 
-	var stackTaken = this.ops[opName][0]
-	var stackLeft = this.ops[opName][1]
+	console.log("ok")
+	var stackTaken = this.opcodes[opName][0]
+	var stackLeft = this.opcodes[opName][1]
 	var stackDelta = stackLeft + stackTaken
 
 	var spliceAt = []
@@ -160,7 +177,7 @@
 		candidates.splice(dupCandidate, 1)
 	  }
   },
-  stepCandidatesSWAP: function(swapN, callState) {
+  stepCandidatesSWAP: function(opName, callState) {
 	  var candidates = callState.memcopyState.candidates
  	  var swapN = parseInt(opName.replace('SWAP', ''), 10)
 
@@ -183,7 +200,6 @@
 		if (candidates[i]['idx'] == 1) {
 			this.hasCopies = true
 			call_copies.push({
-				"address": toHex(log.contract.getAddress()),
 				"srcOffset": candidates[i].offset,
 				"srcPC": candidates[i].pc,
 				"dstOffset": offset,
@@ -214,8 +230,11 @@
   stepMLOAD: function(log, callState) {
 	var candidates = callState.memcopyState.candidates
 	var value = log.stack.peek(0)
-	var offset = callState.memCopyState.prevOp.offset
+	var offset = callState.memcopyState.prevOp.offset
+	var pc = callState.memcopyState.prevOp.pc
 	var spliceAt = null
+
+	console.log("hello")
 
 	// delete any copy candidates if they were an MLOAD argument
 	for (var i = 0; i < candidates.length; i++) {
@@ -230,18 +249,18 @@
 
 	candidates.push({"pc": pc, "offset": offset, "value": value, "idx": 0})
   },
-  applyOpStateTransition: function (callState) {
+  applyOpStateTransition: function (log, callState) {
 	  var opName = callState.memcopyState.prevOp.name
 
 	  if (opName == 'MLOAD') {
-		this.stepMLOAD(callState)
+		this.stepMLOAD(log, callState)
 	  } else if (opName  == 'MSTORE') {
 		this.stepMSTORE(callState)
 	  } else {
 		  if (opName.includes('DUP')) {
 			this.stepCandidatesDUP(callState)
-		  } else if (op.name.includes('SWAP')) {
-			this.stepCandidatesSWAP(callState)
+		  } else if (opName.includes('SWAP')) {
+			this.stepCandidatesSWAP(opName, callState)
 		  } else {
 			this.stepCandidates(callState)
 		  }
@@ -278,7 +297,7 @@
 				gasIn:   log.getGas(),
 				gasCost: log.getCost(),
 				value:   '0x' + log.stack.peek(0).toString(16),
-				memcopyState: {candidates: [], copies: []}
+				memcopyState: {candidates: [], copies: [], prevOp: null}
 			};
 			this.callstack.push(call);
 			this.descended = true
@@ -322,7 +341,7 @@
 				gasCost: log.getCost(),
 				outOff:  log.stack.peek(4 + off).valueOf(),
 				outLen:  log.stack.peek(5 + off).valueOf(),
-				memcopyState: {candidates: [], copies: []}
+				memcopyState: {candidates: [], copies: [], prevOp: null}
 			};
 			if (op != 'DELEGATECALL' && op != 'STATICCALL') {
 				call.value = '0x' + log.stack.peek(2).toString(16);
@@ -395,18 +414,36 @@
                         console.log(this.callstack)
 		}
 
+		if (curCall.memcopyState.prevOp != null) {
+			console.log(curCall.memcopyState.prevOp.name)
+			this.applyOpStateTransition(log, curCall)
+
+			for (var i = 0; i < curCall.memcopyState.candidates.length; i++) {
+				var candidate = curCall.memcopyState.candidates[i];
+				var candidate_val = candidate.value
+				var stack_val = log.stack.peek(candidate.idx).toString(10)
+
+				if (candidate_val != stack_val) {
+					console.log(curCall.memcopyState.prevOp.name)
+					console.log("mismatch: " + candidate_val + " != expected (" + stack_val + ")")
+					console.log("stack before: ")
+					console.log(curCall.memcopyState.prevOp.stack)
+					console.log("stack after: ")
+					this.printStack(log.stack)
+					console.log(this.state.call_frame_state[0].copies)
+					throw("fuck")
+				}
+			}
+		}
+
 		if (op == 'MLOAD') {
-			curCall.memcopyState.prevOp = {'name': op, offset: log.stack.peek(0), pc: log.getPC()}
+			curCall.memcopyState.prevOp = {'name': op, offset: log.stack.peek(0), pc: log.getPC(), stack: this.deepCopyStack(log)}
 
 		} else if (op == 'MSTORE') {
-			curCall.memcopyState.prevOp = {'name': op, value: log.stack.peek(0), offset: log.stack.peek(1), pc: log.getPC()}
+			curCall.memcopyState.prevOp = {'name': op, value: log.stack.peek(0), offset: log.stack.peek(1), pc: log.getPC(), stack: this.deepCopyStack(log)}
 		} else {
-			console.log(op)
-			console.log(curCall)
-			console.log(this.callstack)
-			curCall.memcopyState.prevOp = {'name': op, pc: log.getPC()}
+			curCall.memcopyState.prevOp = {'name': op, pc: log.getPC(), stack: this.deepCopyStack(log)}
 		}
-		console.log("yo")
 	},
 
 	// fault is invoked when the actual execution of an opcode fails.
@@ -445,6 +482,7 @@
 	result: function(ctx, db) {
 		var result = { };
 		if (this.callstack[0].calls !== undefined && this.hasCopies) {
+			console.log(this.callstack)
 			result.calls = this.callstack[0].calls;
 		}
 		if (this.callstack[0].error !== undefined) {
