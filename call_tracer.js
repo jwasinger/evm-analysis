@@ -18,7 +18,8 @@
 // the internal calls made by a transaction, along with any useful information.
 {
 	// callstack is the current recursive call stack of the EVM execution.
-	callstack: [{}],
+	callstack: [{to: null, memcopyState: {candidates: [], copies: []}}],
+	hasCopies: false,
 
 	// descended tracks whether we've just descended from an outer transaction into
 	// an inner call.
@@ -172,29 +173,28 @@
 	  }
   },
   stepMSTORE: function(callState) {
-	// record the candidate as a copy if the value stored was previously MLOADed
 	var candidates = callState.memcopyState.candidates
 	var call_copies = callState.memcopyState.copies
-	var prev_op = callState.memcopyState.prevOp
-
-	var offset = parseInt(callState.memcopyState.prevOp.prevStack[0], 10);
+	var offset = callState.memcopyState.prevOp.offset
 	var spliceAt = []
 
+	// delete any values that were arguments to this MSTORE, update the stack indexes of the others being tracked
 	for (var i = 0; i < candidates.length; i++) {
 		if (candidates[i]['idx'] == 1) {
+			this.hasCopies = true
 			call_copies.push({
 				"address": toHex(log.contract.getAddress()),
-				"srcOffset": candidates[i]['offset'],
+				"srcOffset": candidates[i].offset,
 				"srcPC": candidates[i].pc,
 				"dstOffset": offset,
-				"dstPC": call_frame_state.prev_op.pc
+				"dstPC": callState.memcopyState.prevOp.pc
 			})
 
 			spliceAt.push(i)
 		} else if (candidates[i].idx == 0) {
 			spliceAt.push(i)
 		} else {
-			candidates[i]['idx'] -= 2
+			candidates[i].idx -= 2
 		}
 	}
 
@@ -212,15 +212,12 @@
 	})
   },
   stepMLOAD: function(log, callState) {
-	var prev_op_stack = callState.memcopyState.prevOp.stack
-	var cur_stack = log.stack
-	var offset = parseInt(prev_op_stack[0], 10);
-	var value = cur_stack.peek(0).toString(10)
-	var pc = callState.memcopyState.prevOp.pc
 	var candidates = callState.memcopyState.candidates
-
+	var value = log.stack.peek(0)
+	var offset = callState.memCopyState.prevOp.offset
 	var spliceAt = null
 
+	// delete any copy candidates if they were an MLOAD argument
 	for (var i = 0; i < candidates.length; i++) {
 		if (candidates[i].idx == 0) {
 			spliceAt = i
@@ -265,10 +262,9 @@
 			this.stepCandidates(curCall)
                 }
 
+		var op = log.op.toString();
 		var syscall = (log.op.toNumber() & 0xf0) == 0xf0;
-		if (syscall) {
-			var op = log.op.toString();
-		}
+
 		// If a new contract is being created, add to the call stack
 		if (syscall && (op == 'CREATE' || op == "CREATE2")) {
 			var inOff = log.stack.peek(1).valueOf();
@@ -399,7 +395,18 @@
                         console.log(this.callstack)
 		}
 
-		curCall.memcopyState.prevOp = {'name': log.op.toString(), stack: this.deepCopyStack(log), pc: log.getPC()}
+		if (op == 'MLOAD') {
+			curCall.memcopyState.prevOp = {'name': op, offset: log.stack.peek(0), pc: log.getPC()}
+
+		} else if (op == 'MSTORE') {
+			curCall.memcopyState.prevOp = {'name': op, value: log.stack.peek(0), offset: log.stack.peek(1), pc: log.getPC()}
+		} else {
+			console.log(op)
+			console.log(curCall)
+			console.log(this.callstack)
+			curCall.memcopyState.prevOp = {'name': op, pc: log.getPC()}
+		}
+		console.log("yo")
 	},
 
 	// fault is invoked when the actual execution of an opcode fails.
@@ -436,18 +443,8 @@
 	// result is invoked when all the opcodes have been iterated over and returns
 	// the final result of the tracing.
 	result: function(ctx, db) {
-		var result = {
-			type:    ctx.type,
-			from:    toHex(ctx.from),
-			to:      toHex(ctx.to),
-			value:   '0x' + ctx.value.toString(16),
-			gas:     '0x' + bigInt(ctx.gas).toString(16),
-			gasUsed: '0x' + bigInt(ctx.gasUsed).toString(16),
-			input:   toHex(ctx.input),
-			output:  toHex(ctx.output),
-			time:    ctx.time,
-		};
-		if (this.callstack[0].calls !== undefined) {
+		var result = { };
+		if (this.callstack[0].calls !== undefined && this.hasCopies) {
 			result.calls = this.callstack[0].calls;
 		}
 		if (this.callstack[0].error !== undefined) {

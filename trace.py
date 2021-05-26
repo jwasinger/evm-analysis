@@ -57,8 +57,7 @@ async def trace_block(rpcClient, block_number: int):
     if 'transactions' in block and len(block['transactions']) > 0:
             for tx_hash in block['transactions']:
                     tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
-                    import pdb; pdb.set_trace()
-                    if len(tx_trace['copies']) != 0:
+                    if 'calls' in tx_trace != 0:
                         print("tx:", tx_hash)
                         count_consecutive(tx_trace)
                                 # print("{},{}".format(tx_hash, [(entry['startPc'], entry['consecutive']) for entry in tx_trace['consecutive_counts']]))
