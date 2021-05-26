@@ -104,6 +104,7 @@
 	"REVERT": [-2, 0],
 	"SELFDESTRUCT": [-1, 0],
 	"SIGNEXTEND": [-2, 1],
+	"STOP": [0, 0],
   },
   deepCopyStack: function(log) {
 	var result = []
@@ -128,7 +129,6 @@
 		opName = 'PUSH'
 	}
 
-	console.log("ok")
 	var stackTaken = this.opcodes[opName][0]
 	var stackLeft = this.opcodes[opName][1]
 	var stackDelta = stackLeft + stackTaken
@@ -158,6 +158,7 @@
 		// Array.prototype.includes doesn't exist :(
 		// return spliceAt.includes(index)
 	})
+	console.log("stepCandidates end")
   },
   stepCandidatesDUP: function(callState) {
 	  var opName = callState.memcopyState.prevOp.name
@@ -205,6 +206,7 @@
 				"dstOffset": offset,
 				"dstPC": callState.memcopyState.prevOp.pc
 			})
+			console.log("copied")
 
 			spliceAt.push(i)
 		} else if (candidates[i].idx == 0) {
@@ -234,8 +236,6 @@
 	var pc = callState.memcopyState.prevOp.pc
 	var spliceAt = null
 
-	console.log("hello")
-
 	// delete any copy candidates if they were an MLOAD argument
 	for (var i = 0; i < candidates.length; i++) {
 		if (candidates[i].idx == 0) {
@@ -247,7 +247,7 @@
 		candidates.splice(spliceAt, 1)
 	}
 
-	candidates.push({"pc": pc, "offset": offset, "value": value, "idx": 0})
+	candidates.push({"pc": pc, "offset": offset.toString(10), "value": value.toString(10), "idx": 0})
   },
   applyOpStateTransition: function (log, callState) {
 	  var opName = callState.memcopyState.prevOp.name
@@ -362,8 +362,7 @@
 				// mostly be wrong since it depends on a lot of input args. Skip gas for now.
 			}
 			this.descended = false;
-                        console.log("descended into call " + log.getDepth())
-                        console.log(this.callstack)
+                        console.log("entered call " + log.getDepth())
 		}
 		// If an existing call is returning, pop off the call stack
 		if (syscall && op == 'REVERT') {
@@ -411,11 +410,11 @@
 			this.callstack[left-1].calls.push(call);
 
                         console.log("exited call " + log.getDepth())
-                        console.log(this.callstack)
 		}
 
+		console.log(log.op.toString())
 		if (curCall.memcopyState.prevOp != null) {
-			console.log(curCall.memcopyState.prevOp.name)
+			//console.log(curCall.memcopyState.prevOp)
 			this.applyOpStateTransition(log, curCall)
 
 			for (var i = 0; i < curCall.memcopyState.candidates.length; i++) {
@@ -430,7 +429,8 @@
 					console.log(curCall.memcopyState.prevOp.stack)
 					console.log("stack after: ")
 					this.printStack(log.stack)
-					console.log(this.state.call_frame_state[0].copies)
+					console.log("pc: ")
+					console.log(log.getPC())
 					throw("fuck")
 				}
 			}
@@ -481,19 +481,45 @@
 	// the final result of the tracing.
 	result: function(ctx, db) {
 		var result = { };
-		if (this.callstack[0].calls !== undefined && this.hasCopies) {
-			console.log(this.callstack)
-			result.calls = this.callstack[0].calls;
+		if (this.hasCopies) {
+			var result = {
+				type:    ctx.type,
+				from:    toHex(ctx.from),
+				to:      toHex(ctx.to),
+				value:   '0x' + ctx.value.toString(16),
+				gas:     '0x' + bigInt(ctx.gas).toString(16),
+				gasUsed: '0x' + bigInt(ctx.gasUsed).toString(16),
+				input:   toHex(ctx.input),
+				output:  toHex(ctx.output),
+				time:    ctx.time,
+			};
+			if (this.callstack[0].calls !== undefined) {
+				result.calls = this.callstack[0].calls;
+			}
+
+/*
+			if (this.callstack[0].calls !== undefined && this.hasCopies) {
+				console.log("shitty shit shit")
+				console.log(this.callstack[0].memcopyState.copies);
+				result.calls = this.callstack[0].calls;
+			}
+*/
+			result.copies = this.callstack[0].memcopyState.copies
+
+			if (this.callstack[0].error !== undefined) {
+				result.error = this.callstack[0].error;
+			} else if (ctx.error !== undefined) {
+				result.error = ctx.error;
+			}
+			if (result.error !== undefined && (result.error !== "execution reverted" || result.output ==="0x")) {
+				delete result.output;
+			}
+			console.log(result)
 		}
-		if (this.callstack[0].error !== undefined) {
-			result.error = this.callstack[0].error;
-		} else if (ctx.error !== undefined) {
-			result.error = ctx.error;
-		}
-		if (result.error !== undefined && (result.error !== "execution reverted" || result.output ==="0x")) {
-			delete result.output;
-		}
-		return this.finalize(result);
+		this.hasCopies = false
+
+		// return this.finalize(result);
+		return result
 	},
 
 	// finalize recreates a call object using the final desired field oder for json

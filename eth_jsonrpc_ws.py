@@ -65,5 +65,8 @@ class EthRPCClient:
             return None
 
         result = json.loads(result)
+
+        if not 'result' in result:
+            import pdb; pdb.set_trace()
         return result['result']
 

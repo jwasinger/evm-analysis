@@ -42,7 +42,6 @@ with open("call_tracer.js") as f:
     mcopy_trace_script = f.read()
 
 def count_consecutive(trace_result):
-        import pdb; pdb.set_trace()
         print(trace_result)
 
 async def trace_block(rpcClient, block_number: int):
@@ -56,12 +55,14 @@ async def trace_block(rpcClient, block_number: int):
     print("block:", block_number)
     if 'transactions' in block and len(block['transactions']) > 0:
             for tx_hash in block['transactions']:
-                    tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
-                    if 'calls' in tx_trace != 0:
-                        print("tx:", tx_hash)
-                        count_consecutive(tx_trace)
-                                # print("{},{}".format(tx_hash, [(entry['startPc'], entry['consecutive']) for entry in tx_trace['consecutive_counts']]))
+                    if tx_hash != "0xc5e46fe1aa43cf057e555166bc0ab6e7672e9a481f0d57ad346d2810d54bcba7":
+                        continue
 
+                    tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
+                    if 'calls' in tx_trace:
+                        print("tx:", tx_hash)
+                        sys.stdout.flush()
+                        count_consecutive(tx_trace)
     return result
 
 
