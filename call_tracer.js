@@ -20,6 +20,7 @@
 	// callstack is the current recursive call stack of the EVM execution.
 	callstack: [{to: null, memcopyState: {candidates: [], copies: [], prevOp: null}}],
 	hasCopies: false,
+	lastOpWasExit: false,
 
 	// descended tracks whether we've just descended from an outer transaction into
 	// an inner call.
@@ -122,7 +123,7 @@
     result += "}"
     console.log(result)
   },
-  stepCandidates: function(callState) {
+  stepCandidates: function(log, callState) {
 	var opName = callState.memcopyState.prevOp.name
 
 	if (opName.includes('PUSH')) {
@@ -142,6 +143,14 @@
 			// candidate was an argument to this opcode
 			spliceAt.push(i)
 		} else {
+			if (candidates[i].value == '1ecee71b4653062b34c01') {
+				console.log("updating")
+				console.log(candidates[i].idx)
+				console.log(stackDelta)
+				this.printStack(log.stack)
+				console.log()
+			}
+
 			candidates[i].idx += stackDelta
 		}
 	}
@@ -261,7 +270,7 @@
 		  } else if (opName.includes('SWAP')) {
 			this.stepCandidatesSWAP(opName, callState)
 		  } else {
-			this.stepCandidates(callState)
+			this.stepCandidates(log, callState)
 		  }
 	  }
   },
@@ -278,12 +287,6 @@
 		var op = log.op.toString();
 		var syscall = (log.op.toNumber() & 0xf0) == 0xf0;
 
-		if (log.op.toString().includes('STATICCALL')) {
-			console.log(log.getDepth())
-			console.log(log.op.toString())
-			this.printStack(log.stack)
-			console.log(this.callstack[this.callstack.length - 1].memcopyState.candidates)
-		}
 
 		// If a new contract is being created, add to the call stack
 		if (syscall && (op == 'CREATE' || op == "CREATE2")) {
@@ -300,6 +303,13 @@
 				value:   '0x' + log.stack.peek(0).toString(16),
 				memcopyState: {candidates: [], copies: [], prevOp: null}
 			};
+
+			// apply the previous opcode before before we recurse into a new frame
+			var curCall = this.callstack[this.callstack.length - 1]
+			if (curCall.memcopyState.prevOp != null) {
+				this.applyOpStateTransition(log, curCall)
+			}
+
 			this.callstack.push(call);
 			this.descended = true
 			return;
@@ -346,6 +356,12 @@
 			};
 			if (op != 'DELEGATECALL' && op != 'STATICCALL') {
 				call.value = '0x' + log.stack.peek(2).toString(16);
+			}
+
+			// apply the previous opcode before before we recurse into a new frame
+			var curCall = this.callstack[this.callstack.length - 1]
+			if (curCall.memcopyState.prevOp != null) {
+				this.applyOpStateTransition(log, curCall)
 			}
 
 			// set the prevOp for this callFrame as this `CALL*` before adding a new frame
@@ -412,9 +428,24 @@
 				this.callstack[left-1].calls = [];
 			}
 			this.callstack[left-1].calls.push(call);
-
+			
+/*
+			console.log(this.callstack[this.callstack.length - 1].memcopyState)
                         console.log("exited call " + log.getDepth())
+*/
+			this.lastOpWasExit = true
 		}
+
+/*
+		if (this.lastOpWasExit) {
+			console.log("just exited")
+			console.log(log.op.toString())
+			this.printStack(log.stack)
+			console.log(this.callstack[this.callstack.length - 1].memcopyState)
+			console.log()
+			this.lastOpWasExit = false
+		}
+*/
 
 
 
@@ -423,17 +454,21 @@
 			//console.log(curCall.memcopyState.candidates)
 			this.applyOpStateTransition(log, curCall)
 
-/*
-			console.log("prevOp:")
-			console.log(curCall.memcopyState.prevOp.name)
-			console.log(curCall.memcopyState.candidates)
-			console.log("end")
-*/
 
 			for (var i = 0; i < curCall.memcopyState.candidates.length; i++) {
 				var candidate = curCall.memcopyState.candidates[i];
 				var candidate_val = candidate.value
 				var stack_val = log.stack.peek(candidate.idx).toString(16)
+
+/*
+				if (candidate_val == '1ecee71b4653062b34c01') {
+					console.log("found")
+					this.printStack(log.stack)
+					console.log(candidate.idx)
+					console.log(log.op.toString())
+					console.log()
+				}
+*/
 
 				if (candidate_val != stack_val) {
 					console.log(curCall.memcopyState.prevOp.name)

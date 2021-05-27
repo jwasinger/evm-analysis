@@ -55,8 +55,8 @@ async def trace_block(rpcClient, block_number: int):
     print("block:", block_number)
     if 'transactions' in block and len(block['transactions']) > 0:
             for tx_hash in block['transactions']:
-                    if tx_hash != "0xc5e46fe1aa43cf057e555166bc0ab6e7672e9a481f0d57ad346d2810d54bcba7":
-                        continue
+                    #if tx_hash != "0xc5e46fe1aa43cf057e555166bc0ab6e7672e9a481f0d57ad346d2810d54bcba7":
+                        #continue
 
                     tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
                     if 'calls' in tx_trace:
