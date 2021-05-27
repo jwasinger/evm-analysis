@@ -109,18 +109,18 @@
   deepCopyStack: function(log) {
 	var result = []
 	for (var i = 0; i < log.stack.length(); i++) {
-		result.push(log.stack.peek(i))
+		result.push(log.stack.peek(i).toString(16))
 	}
 
 	return result
   },
   printStack: function(stack) {
-    console.log("{")
+    var result = "{"
     for (var i = 0; i < stack.length(); i++) {
-      console.log(stack.peek(i).toString())
-      console.log(",")
+      result += stack.peek(i).toString(16) + ","
     }
-    console.log("}")
+    result += "}"
+    console.log(result)
   },
   stepCandidates: function(callState) {
 	var opName = callState.memcopyState.prevOp.name
@@ -158,7 +158,6 @@
 		// Array.prototype.includes doesn't exist :(
 		// return spliceAt.includes(index)
 	})
-	console.log("stepCandidates end")
   },
   stepCandidatesDUP: function(callState) {
 	  var opName = callState.memcopyState.prevOp.name
@@ -247,7 +246,7 @@
 		candidates.splice(spliceAt, 1)
 	}
 
-	candidates.push({"pc": pc, "offset": offset.toString(10), "value": value.toString(10), "idx": 0})
+	candidates.push({"pc": pc, "offset": offset.toString(16), "value": value.toString(16), "idx": 0})
   },
   applyOpStateTransition: function (log, callState) {
 	  var opName = callState.memcopyState.prevOp.name
@@ -276,13 +275,15 @@
 			return;
 		}
 
-		var curCall = this.callstack[this.callstack.length - 1]
-		if (curCall.prevOp != null) {
-			this.stepCandidates(curCall)
-                }
-
 		var op = log.op.toString();
 		var syscall = (log.op.toNumber() & 0xf0) == 0xf0;
+
+		if (log.op.toString().includes('STATICCALL')) {
+			console.log(log.getDepth())
+			console.log(log.op.toString())
+			this.printStack(log.stack)
+			console.log(this.callstack[this.callstack.length - 1].memcopyState.candidates)
+		}
 
 		// If a new contract is being created, add to the call stack
 		if (syscall && (op == 'CREATE' || op == "CREATE2")) {
@@ -346,6 +347,9 @@
 			if (op != 'DELEGATECALL' && op != 'STATICCALL') {
 				call.value = '0x' + log.stack.peek(2).toString(16);
 			}
+
+			// set the prevOp for this callFrame as this `CALL*` before adding a new frame
+			this.callstack[this.callstack.length - 1].memcopyState.prevOp = {'name': op, offset: log.stack.peek(0), pc: log.getPC(), stack: this.deepCopyStack(log)}
 			this.callstack.push(call);
 			this.descended = true
 			return;
@@ -412,19 +416,29 @@
                         console.log("exited call " + log.getDepth())
 		}
 
-		console.log(log.op.toString())
+
+
+		var curCall = this.callstack[this.callstack.length - 1]
 		if (curCall.memcopyState.prevOp != null) {
-			//console.log(curCall.memcopyState.prevOp)
+			//console.log(curCall.memcopyState.candidates)
 			this.applyOpStateTransition(log, curCall)
+
+/*
+			console.log("prevOp:")
+			console.log(curCall.memcopyState.prevOp.name)
+			console.log(curCall.memcopyState.candidates)
+			console.log("end")
+*/
 
 			for (var i = 0; i < curCall.memcopyState.candidates.length; i++) {
 				var candidate = curCall.memcopyState.candidates[i];
 				var candidate_val = candidate.value
-				var stack_val = log.stack.peek(candidate.idx).toString(10)
+				var stack_val = log.stack.peek(candidate.idx).toString(16)
 
 				if (candidate_val != stack_val) {
 					console.log(curCall.memcopyState.prevOp.name)
-					console.log("mismatch: " + candidate_val + " != expected (" + stack_val + ")")
+					console.log("mismatch: expected " + candidate_val + " != actual " + stack_val + ")")
+					console.log("candidate index: " + candidate.idx)
 					console.log("stack before: ")
 					console.log(curCall.memcopyState.prevOp.stack)
 					console.log("stack after: ")
