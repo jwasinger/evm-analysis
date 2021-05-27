@@ -58,9 +58,11 @@ async def trace_block(rpcClient, block_number: int):
                     #if tx_hash != "0xc5e46fe1aa43cf057e555166bc0ab6e7672e9a481f0d57ad346d2810d54bcba7":
                         #continue
 
+                    print("tx:", tx_hash)
                     tx_trace = await rpcClient.debugTraceTransaction(tx_hash, mcopy_trace_script)
-                    if 'calls' in tx_trace:
-                        print("tx:", tx_hash)
+                    if tx_trace == None:
+                        print("error")
+                    elif 'calls' in tx_trace:
                         sys.stdout.flush()
                         count_consecutive(tx_trace)
     return result
