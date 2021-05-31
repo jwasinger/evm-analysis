@@ -77,7 +77,6 @@ def main():
 			elif trace_lines[i + 1] == 'error':
 				i += 1
 			elif trace_lines[i + 1].startswith("{"):
-				print(tx)
 				trace_result = json.loads(trace_lines[i + 1].replace("'", '"').replace('None', '"None"'))
 				copies = parse_contract_copies(trace_result)
 				for k, v in zip(copies.keys(), copies.values()):
@@ -97,13 +96,26 @@ def main():
 
 		i += 1
 
-	aggregate_copies = zip(aggregate_copies.keys(), copies.values())
+	aggregate_copies = zip(aggregate_copies.keys(), aggregate_copies.values())
 	aggregate_copies = list(reversed(sorted(aggregate_copies, key=lambda x: x[1]['copy_count'])))
 
 	max_copy_sizes = zip(max_copy_sizes.keys(), max_copy_sizes.values())
 	max_copy_sizes = list(reversed(sorted(max_copy_sizes, key=lambda x: x[1])))
 
 	import pdb; pdb.set_trace()
+	print("aggregate copy-count/gas-consumed graph csv:")
+	print()
+	print("contract,total-copy-count,total-gas-used")
+	for c in aggregate_copies[:5]:
+		print(c[0],c[1]['copy_count'],c[1]['gas_used'])
+
+	print()
+	print()
+	print("contracts with largest consecutive copy sizes csv:")
+	print()
+	print("contract,consec-copy-count")
+	for c in max_copy_sizes[:5]:
+		print(c[0],c[1])
 
 if __name__ == "__main__":
 	main()
