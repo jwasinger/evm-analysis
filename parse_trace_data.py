@@ -31,6 +31,21 @@ def parse_contract_copies(tx_trace):
 
 	return result
 
+def bulk_copy_bounds_check(start_src, start_dst, consec_count, next_src, next_dst):
+	if next_src == start_src + consec_count * 32 and next_dst == start_dst + consec_count * 32:
+		if start_src < start_dst:
+			if start_src + consec_count * 32 >= start_dst:
+				return False
+			else:
+				return True
+		else:
+			if start_dst + consec_count * 32 >= start_src:
+				return False
+			else:
+				return True
+	else:
+		return False
+
 def measure_consecutive_copies(call_copies):
 	# quick-n-diry: just track ascending offsets in (start_offset, start_offset + 32, start_offset + 64, ...)
 	cur_start = int(call_copies[0]['srcOffset'], 16)
@@ -39,7 +54,7 @@ def measure_consecutive_copies(call_copies):
 	max_consecutive = 1
 
 	for copy in call_copies[1:]:
-		if int(copy['srcOffset'], 16) == cur_start + cur_consecutive * 32 and int(copy['dstOffset'], 16) == cur_dst + cur_consecutive * 32: # TODO check that the src and dst blocks of memory do not overlap
+		if bulk_copy_bounds_check(cur_start, cur_dst, cur_consecutive, int(copy['srcOffset'], 16), int(copy['dstOffset'], 16)):
 			cur_consecutive += 1
 		else:
 			max_consecutive = max(cur_consecutive, max_consecutive)
@@ -71,6 +86,7 @@ def main():
 
 		if line.startswith('tx: '):
 			tx = line[4:]
+			# print(tx)
 
 			if i + 1 >= len(trace_lines):
 				break
