@@ -102,11 +102,10 @@ def main():
 	max_copy_sizes = zip(max_copy_sizes.keys(), max_copy_sizes.values())
 	max_copy_sizes = list(reversed(sorted(max_copy_sizes, key=lambda x: x[1])))
 
-	import pdb; pdb.set_trace()
 	print("aggregate copy-count/gas-consumed graph csv:")
 	print()
 	print("contract,total-copy-count,total-gas-used")
-	for c in aggregate_copies[:5]:
+	for c in aggregate_copies[:10]:
 		print(c[0],c[1]['copy_count'],c[1]['gas_used'])
 
 	print()
@@ -114,7 +113,7 @@ def main():
 	print("contracts with largest consecutive copy sizes csv:")
 	print()
 	print("contract,consec-copy-count")
-	for c in max_copy_sizes[:5]:
+	for c in max_copy_sizes[:10]:
 		print(c[0],c[1])
 
 if __name__ == "__main__":
