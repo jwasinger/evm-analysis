@@ -1,5 +1,51 @@
 import sys, json, re, heapq
 
+# contract call test case:
+
+# 0x7a250d5630b4cf539739df2c5dacb4c659f2488d -> 0x2b6a25f7c54f43c71c743e627f5663232586c39f
+# 0x7a250d5630b4cf539739df2c5dacb4c659f2488d -> 0x8a9c67fee641579deba04928c4bc45f66e26343a
+# 0x7a250d5630b4cf539739df2c5dacb4c659f2488d -> 0x2b6a25f7c54f43c71c743e627f5663232586c39f
+# 0x7a250d5630b4cf539739df2c5dacb4c659f2488d -> 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+# 0x7a250d5630b4cf539739df2c5dacb4c659f2488d -> 0x0fc0e5deb2208928d79fe38fbfa897a83a44e692
+
+tx_test_case1 = {'type': 'CALL', 'from': '0x0fc0e5deb2208928d79fe38fbfa897a83a44e692', 'to': '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', 'value': '0x0', 'gas': '0x25786', 'gasUsed': '0x21177', 'input': '0x18cbafe5000000000000000000000000000000000000000000000a127b66b4afe6d6fc030000000000000000000000000000000000000000000000011841ec30d0673c9e00000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000fc0e5deb2208928d79fe38fbfa897a83a44e692000000000000000000000000000000000000000000000000000000005f1df98f00000000000000000000000000000000000000000000000000000000000000020000000000000000000000008a9c67fee641579deba04928c4bc45f66e26343a000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', 'output': '0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000a127b66b4afe6d6fc030000000000000000000000000000000000000000000000011b0f61c0a986fd3a', 'time': '19.322094988s', 'calls': [{'type': 'STATICCALL', 'from': '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', 'to': '0x2b6a25f7c54f43c71c743e627f5663232586c39f', 'input': '0x0902f1ac', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'RETURN', 'pc': 788, 'stack': ['80', '60', '902f1ac']}}, 'gas': '0x24081', 'gasUsed': '0x4b4', 'output': '0x00000000000000000000000000000000000000000001e2dbf64db0807bdc4ffe00000000000000000000000000000000000000000000003645bdcbb017247663000000000000000000000000000000000000000000000000000000005f1df467'}, {'type': 'CALL', 'from': '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', 'to': '0x8a9c67fee641579deba04928c4bc45f66e26343a', 'input': '0x23b872dd0000000000000000000000000fc0e5deb2208928d79fe38fbfa897a83a44e6920000000000000000000000002b6a25f7c54f43c71c743e627f5663232586c39f000000000000000000000000000000000000000000000a127b66b4afe6d6fc03', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'RETURN', 'pc': 1695, 'stack': ['0', '20', '1', '1', '82582c4271f3f6dd5f4306cbcac822076516c53', '211', '75', '23b872dd']}}, 'value': '0x0', 'gas': '0x22ec6', 'calls': [{'type': 'DELEGATECALL', 'from': '0x8a9c67fee641579deba04928c4bc45f66e26343a', 'to': '0x082582c4271f3f6dd5f4306cbcac822076516c53', 'input': '0x23b872dd0000000000000000000000000fc0e5deb2208928d79fe38fbfa897a83a44e6920000000000000000000000002b6a25f7c54f43c71c743e627f5663232586c39f000000000000000000000000000000000000000000000a127b66b4afe6d6fc03', 'memcopyState': {'candidates': [], 'copies': [{'srcOffset': '0', 'srcPC': 2714, 'dstOffset': '80', 'dstPC': 2725}], 'prevOp': {'name': 'RETURN', 'pc': 555, 'stack': ['80', '20', '23b872dd']}}, 'gas': '0x21b77', 'gasUsed': '0x60d1', 'output': '0x'}], 'gasUsed': '0x6bbc', 'output': '0x'}, {'type': 'CALL', 'from': '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', 'to': '0x2b6a25f7c54f43c71c743e627f5663232586c39f', 'input': '0x022c0d9f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011b0f61c0a986fd3a0000000000000000000000007a250d5630b4cf539739df2c5dacb4c659f2488d00000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000', 'memcopyState': {'candidates': [], 'copies': [{'srcOffset': 'e0', 'srcPC': 8366, 'dstOffset': '124', 'dstPC': 8368}, {'srcOffset': '100', 'srcPC': 8366, 'dstOffset': '144', 'dstPC': 8368}], 'prevOp': {'name': 'STOP', 'pc': 600, 'stack': ['22c0d9f']}}, 'value': '0x0', 'gas': '0x1b78a', 'calls': [{'type': 'CALL', 'from': '0x2b6a25f7c54f43c71c743e627f5663232586c39f', 'to': '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', 'input': '0xa9059cbb0000000000000000000000007a250d5630b4cf539739df2c5dacb4c659f2488d0000000000000000000000000000000000000000000000011b0f61c0a986fd3a', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'RETURN', 'pc': 969, 'stack': ['60', '20', 'a9059cbb']}}, 'value': '0x0', 'gas': '0x188a9', 'gasUsed': '0x75d2', 'output': '0x'}, {'type': 'STATICCALL', 'from': '0x2b6a25f7c54f43c71c743e627f5663232586c39f', 'to': '0x8a9c67fee641579deba04928c4bc45f66e26343a', 'input': '0x70a082310000000000000000000000002b6a25f7c54f43c71c743e627f5663232586c39f', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'RETURN', 'pc': 1695, 'stack': ['0', '20', '1', '1', '82582c4271f3f6dd5f4306cbcac822076516c53', '211', '75', '70a08231']}}, 'gas': '0x10db8', 'calls': [{'type': 'DELEGATECALL', 'from': '0x8a9c67fee641579deba04928c4bc45f66e26343a', 'to': '0x082582c4271f3f6dd5f4306cbcac822076516c53', 'input': '0x70a082310000000000000000000000002b6a25f7c54f43c71c743e627f5663232586c39f', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'RETURN', 'pc': 581, 'stack': ['80', '20', '70a08231']}}, 'gas': '0xfef6', 'gasUsed': '0x51a', 'output': '0x'}], 'gasUsed': '0xffc', 'output': '0x00000000000000000000000000000000000000000001ecee71b4653062b34c01'}, {'type': 'STATICCALL', 'from': '0x2b6a25f7c54f43c71c743e627f5663232586c39f', 'to': '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', 'input': '0x70a082310000000000000000000000002b6a25f7c54f43c71c743e627f5663232586c39f', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'RETURN', 'pc': 737, 'stack': ['60', '20', '2cc', '70a08231']}}, 'gas': '0xf7c9', 'gasUsed': '0x4d2', 'output': '0x0000000000000000000000000000000000000000000000352aae69ef6d9d7929'}], 'gasUsed': '0x1230f', 'output': '0x'}, {'type': 'CALL', 'from': '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', 'to': '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', 'input': '0x2e1a7d4d0000000000000000000000000000000000000000000000011b0f61c0a986fd3a', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'STOP', 'pc': 613, 'stack': ['2e1a7d4d']}}, 'value': '0x0', 'gas': '0x926f', 'calls': [{'type': 'CALL', 'from': '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', 'to': '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', 'input': '0x', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': {'name': 'STOP', 'pc': 468, 'stack': []}}, 'value': '0x11b0f61c0a986fd3a', 'gas': '0x8fc', 'gasUsed': '0x53', 'output': '0x'}], 'gasUsed': '0x2e93', 'output': '0x'}, {'type': 'CALL', 'from': '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', 'to': '0x0fc0e5deb2208928d79fe38fbfa897a83a44e692', 'input': '0x', 'memcopyState': {'candidates': [], 'copies': [], 'prevOp': 'None'}, 'value': '0x11b0f61c0a986fd3a', 'output': '0x'}], 'copies': [{'srcOffset': '2da', 'srcPC': 16988, 'dstOffset': '33e', 'dstPC': 16990}, {'srcOffset': '2fa', 'srcPC': 16988, 'dstOffset': '35e', 'dstPC': 16990}, {'srcOffset': '31a', 'srcPC': 16988, 'dstOffset': '37e', 'dstPC': 16990}, {'srcOffset': '49b', 'srcPC': 17756, 'dstOffset': '49b', 'dstPC': 17758}, {'srcOffset': 'e0', 'srcPC': 843, 'dstOffset': '4db', 'dstPC': 847}, {'srcOffset': '100', 'srcPC': 880, 'dstOffset': '100', 'dstPC': 884}, {'srcOffset': '120', 'srcPC': 880, 'dstOffset': '100', 'dstPC': 884}]}
+
+def print_tx_trace_calls(tx_trace):
+	for call in tx_trace['calls']:
+		print("{} -> {}".format(call['from'], call['to']))
+
+def parse_tx_2(tx_trace):
+	call_graph = [{'address': tx_trace['to'], 'calls': []}]
+	call_stack = [{'address': tx_trace['to'], 'call_graph_node': call_graph[0]}]
+	cur_node = call_graph[0]
+
+	for call in tx_trace['calls']:
+		import pdb; pdb.set_trace()
+		if call['from'] == call_stack[-1]['address']:
+			# call is recursing into a new frame
+			new_node = {'address': call['to'], 'calls': []}
+			cur_node['calls'].append(new_node)
+			cur_node = new_node
+			call_stack.append({'address': call['to'], 'call_graph_node': cur_node})
+		else:
+			# previous call frame(s) ended, call is from some parent frame
+			call_stack.pop(-1)
+			while len(call_stack) > 0:
+				if call_stack[-1]['address'] == call['from']:
+					call_stack[-1]['call_graph_node']['calls'].append({
+						'address': call['to'],
+						'calls': [],
+					})
+					cur_node = call_stack[-1]['call_graph_node']
+					break
+				else:
+					call_stack.pop(-1)
+
+	return call_graph
+
+result1 = parse_tx_2(tx_test_case1)
+import pdb; pdb.set_trace()
+
 # return a map of contract_address: (copy count, gas spent), include reverted calls
 # TODO figure out how to make the tracer emit gas spent in each call frame (without including internal calls)
 def parse_contract_copies(tx_trace):
@@ -7,37 +53,9 @@ def parse_contract_copies(tx_trace):
 	if not 'gasUsed' in tx_trace:
 		return None
 
-	result[tx_trace['to']] = { 'consecutive_copies': [0], 'copy_count': len(tx_trace['copies']), 'gas_used': int(tx_trace['gasUsed'], 16), 'gas_used_mcopy': int(tx_trace['gasUsed'], 16)}
-
-	if len(tx_trace['copies']) > 0:
-		copies = measure_consecutive_copies(tx_trace['copies'])
-		result[tx_trace['to']]['consecutive_copies'] = copies
-		result[tx_trace['to']]['gas_used_mcopy'] = estimate_mcopy_savings(result[tx_trace['to']]['gas_used'], copies)
-
-	for call in tx_trace['calls']:
-		if not 'gasUsed' in call and call['output'] == '0x':
-			# call to EOA/non-contract
-			continue
-
-		if call['to'] in result:
-			result[call['to']]['copy_count'] += len(call['memcopyState']['copies'])
-			result[call['to']]['gas_used'] += int(call['gasUsed'], 16)
-			result[call['to']]['gas_used_mcopy'] += int(call['gasUsed'], 16)
-		else:
-			result[call['to']] = {'copy_count': len(call['memcopyState']['copies']), 'gas_used': int(call['gasUsed'], 16), 'gas_used_mcopy': int(call['gasUsed'], 16), 'consecutive_copies': [0]}
-
-		if len(call['memcopyState']['copies']) > 0:
-			consecutive_copies = measure_consecutive_copies(call['memcopyState']['copies'])
-			result[call['to']]['consecutive_copies'] = consecutive_copies
-			result[call['to']]['gas_used_mcopy'] = estimate_mcopy_savings(result[call['to']]['gas_used'], consecutive_copies)
-
-		result[call['from']]['gas_used'] -= int(call['gasUsed'], 16)
-		result[call['from']]['gas_used_mcopy'] -= int(call['gasUsed'], 16)
-
-		assert result[call['from']]['gas_used'] >= 0, "whoops"
-		assert result[call['from']]['gas_used_mcopy'] <= result[call['from']]['gas_used_mcopy'], "whoops"
-
-	return result
+	result = parse_tx(tx_trace)
+	import pdb; pdb.set_trace()
+	return
 
 def bulk_copy_bounds_check(start_src, start_dst, consec_count, next_src, next_dst):
 	if next_src == start_src + consec_count * 32 and next_dst == start_dst + consec_count * 32:
@@ -119,21 +137,8 @@ def main():
 			elif trace_lines[i + 1].startswith("{"):
 				trace_result = json.loads(trace_lines[i + 1].replace("'", '"').replace('None', '"None"'))
 
-				copies = parse_contract_copies(trace_result)
-
-				for k, v in zip(copies.keys(), copies.values()):
-					if k in max_copy_sizes:
-						max_copy_sizes[k] = max(max_copy_sizes[k], max(v['consecutive_copies']))
-					else:
-						max_copy_sizes[k] = max(v['consecutive_copies'])
-
-					if not k in aggregate_copies:
-						aggregate_copies[k] = {'copy_count': 0, 'gas_used': 0, 'gas_used_mcopy': 0}
-
-					aggregate_copies[k]['copy_count'] += v['copy_count']
-					aggregate_copies[k]['gas_used'] += v['gas_used']
-					import pdb; pdb.set_trace()
-					aggregate_copies[k]['gas_used_mcopy'] += v['gas_used_mcopy']
+				copies = parse_tx(trace_result)
+				import pdb; pdb.set_trace()
 
 				i += 1
 
