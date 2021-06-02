@@ -1,6 +1,5 @@
 import sys, json, re, heapq
 
-
 def bulk_copy_bounds_check(start_src, start_dst, consec_count, next_src, next_dst):
 	if next_src == start_src + consec_count * 32 and next_dst == start_dst + consec_count * 32:
 		if start_src < start_dst:
@@ -20,21 +19,37 @@ def measure_consecutive_copies(call_copies):
 	# quick-n-diry: just track ascending offsets in (start_offset, start_offset + 32, start_offset + 64, ...)
 	cur_start = int(call_copies[0]['srcOffset'], 16)
 	cur_dst = int(call_copies[0]['dstOffset'], 16)
+	consecutive_counts = []
 	cur_consecutive = 1
-	max_consecutive = 1
 
 	for copy in call_copies[1:]:
 		if bulk_copy_bounds_check(cur_start, cur_dst, cur_consecutive, int(copy['srcOffset'], 16), int(copy['dstOffset'], 16)):
 			cur_consecutive += 1
 		else:
-			max_consecutive = max(cur_consecutive, max_consecutive)
+			consecutive_counts.append(cur_consecutive)
 			cur_consecutive = 1
 			cur_start = int(copy['srcOffset'], 16)
 			cur_dst = int(copy['dstOffset'], 16)
 
-	max_consecutive = max(cur_consecutive, max_consecutive)
+	consecutive_counts.append(cur_consecutive)
+	return consecutive_counts 
 
-	return max_consecutive
+# cost for mcopy from EIP (assuming no memory expansion)
+def mcopy_cost_model(num_words):
+	return 3 + 3 * num_words
+
+def estimate_mcopy_savings(non_mcopy_gas, copies) -> int:
+	COST_PUSH = 3
+	COST_MLOAD = 3
+	COST_MSTORE = 3
+
+	result = non_mcopy_gas
+
+	for copy_size in copies:
+		result -= (COST_PUSH + COST_MLOAD + COST_PUSH + COST_PUSH + COST_MSTORE) * copy_size
+		result += COST_PUSH + COST_PUSH + mcopy_cost_model(copy_size)
+
+	return result
 
 # traverse the callgraph removing the cost of calling child contracts from parent gasUsed
 # we need the aggregate gas spent in each contract (which doesn't include the cost of subcalls, other than cost of CALL itself)
@@ -58,26 +73,33 @@ def trim_subcall_costs(tx_trace):
 		return call_gas_used
 
 def aggregate_mcopy_savings(tx_trace):
+	result = []
 
 	# return [{account: (gas_used, gas_used_mcopy, consecutive_copies), ...]
 	if not 'gasUsed' in tx_trace:
 		return []
 
-	if not 'calls' in tx_trace:
-		gas_used = tx_trace['gasUsed']
-		gas_used_mcopy = gas_used
-		
-		copies = tx_trace['memcopyState']['copies']
-		if len(copies) > 0:
-			gas_used_mcopy = estimate_mcopy_savings(copies)
+	gas_used = int(tx_trace['gasUsed'], 16)
+	gas_used_mcopy = gas_used
+	
+	consec_copies = []
+	copies = []
 
-		return [{'account': tx_trace['to'], 'gas_used': gas_used, 'gas_used_mcopy': gas_used_mcopy, 'copies': copies}]
-	else:
-		result = []
+	if "copies" in tx_trace:
+		copies = tx_trace['copies']
+
+	if len(copies) > 0:
+		consec_copies = measure_consecutive_copies(copies)
+		gas_used_mcopy = estimate_mcopy_savings(gas_used, consec_copies)
+		assert gas_used_mcopy > 0, "shite"
+
+	result += [{'account': tx_trace['to'], 'gas_used': gas_used, 'gas_used_mcopy': gas_used_mcopy, 'copies': copies, "consecutive_copies": consec_copies}]
+
+	if 'calls' in tx_trace:
 		for subcall in tx_trace['calls']:
 			result += aggregate_mcopy_savings(subcall)
 
-		return result
+	return result
 
 # return a map of contract_address: (copy count, gas spent), include reverted calls
 # TODO figure out how to make the tracer emit gas spent in each call frame (without including internal calls)
@@ -87,7 +109,7 @@ def parse_contract_copies(tx_trace):
 	# TODO sanity check which sums up call costs and makes sure that they sum up to the original "un-trimmed" trace
 
 	savings = aggregate_mcopy_savings(tx_trace)
-	import pdb; pdb.set_trace()
+	return savings
 
 def main():
 	trace_file = sys.argv[1]
@@ -118,22 +140,12 @@ def main():
 			elif trace_lines[i + 1].startswith("{"):
 				trace_result = json.loads(trace_lines[i + 1].replace("'", '"').replace('None', '"None"'))
 				copies = parse_contract_copies(trace_result)
-				for k, v in zip(copies.keys(), copies.values()):
-					if k in max_copy_sizes:
-						if v['max_consecutive_copies'] > max_copy_sizes[k]:
-							max_copy_sizes[k] = v['max_consecutive_copies']
-					else:
-						max_copy_sizes[k] = v['max_consecutive_copies']
-
-					if not k in aggregate_copies:
-						aggregate_copies[k] = {'copy_count': 0, 'gas_used': 0}
-
-					aggregate_copies[k]['copy_count'] += v['copy_count']
-					aggregate_copies[k]['gas_used'] += v['gas_used']
-
+				import pdb; pdb.set_trace()
 				i += 1
 
 		i += 1
+
+	return # --------------------
 
 	aggregate_copies = zip(aggregate_copies.keys(), aggregate_copies.values())
 	aggregate_copies = list(reversed(sorted(aggregate_copies, key=lambda x: x[1]['copy_count'])))
