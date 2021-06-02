@@ -75,8 +75,12 @@ def trim_subcall_costs(tx_trace):
 def aggregate_mcopy_savings(tx_trace):
 	result = []
 
-	# return [{account: (gas_used, gas_used_mcopy, consecutive_copies), ...]
+	# ignore calls to EOAs
 	if not 'gasUsed' in tx_trace:
+		return []
+
+	# ignore copies executed in CREATE
+	if not "to" in tx_trace:
 		return []
 
 	gas_used = int(tx_trace['gasUsed'], 16)
@@ -115,14 +119,16 @@ def main():
 	trace_file = sys.argv[1]
 	trace_lines = None
 
-	max_copy_sizes = {}
-	aggregate_copies = {}
-
 	with open(trace_file) as f:
 		trace_lines = f.readlines()
 
 	cur_tx = None
 	cur_block = None
+
+	consecutive_copies = {}
+	aggregate_savings = {}
+
+	result = {}
 
 	i = 0
 	tx = None
@@ -140,32 +146,58 @@ def main():
 			elif trace_lines[i + 1].startswith("{"):
 				trace_result = json.loads(trace_lines[i + 1].replace("'", '"').replace('None', '"None"'))
 				copies = parse_contract_copies(trace_result)
-				import pdb; pdb.set_trace()
+				for acct in copies:
+					consecutive_copies = acct['consecutive_copies']
+					if len(consecutive_copies) == 0:
+						consecutive_copies = [0]
+
+					if acct['account'] in result:
+						entry = result[acct['account']]
+						entry['gas_used'] += acct['gas_used']
+						entry['gas_used_mcopy'] += acct['gas_used_mcopy']
+						entry['max_consecutive_copies'] = max(entry['max_consecutive_copies'], max(consecutive_copies))
+					else:
+						result[acct['account']] = {
+							'gas_used': acct['gas_used'],
+							'gas_used_mcopy': acct['gas_used_mcopy'],
+							'max_consecutive_copies': max(consecutive_copies)
+						}
 				i += 1
 
 		i += 1
 
-	return # --------------------
+	max_consecutive = 0
+	max_consecutive_acct = None
 
-	aggregate_copies = zip(aggregate_copies.keys(), aggregate_copies.values())
-	aggregate_copies = list(reversed(sorted(aggregate_copies, key=lambda x: x[1]['copy_count'])))
+	for acct, value in result.items():
+		if value['max_consecutive_copies'] > max_consecutive:
+			max_consecutive_acct = acct
+			max_consecutive = value['max_consecutive_copies']
 
-	max_copy_sizes = zip(max_copy_sizes.keys(), max_copy_sizes.values())
-	max_copy_sizes = list(reversed(sorted(max_copy_sizes, key=lambda x: x[1])))
+	ENTRY_NUM=5
 
-	print("aggregate copy-count/gas-consumed graph csv:")
-	print()
-	print("contract,total-copy-count,total-gas-used")
-	for c in aggregate_copies[:10]:
-		print(c[0],c[1]['copy_count'],c[1]['gas_used'])
+	# store data for graphs to csvs:
 
-	print()
-	print()
-	print("contracts with largest consecutive copy sizes csv:")
-	print()
-	print("contract,consec-copy-count")
-	for c in max_copy_sizes[:10]:
-		print(c[0],c[1])
+	# contracts with largest consecutive copy sizes
+	with open('data/consecutive.csv', 'w') as f:
+		max_consecutive_accts = list(reversed(sorted(result.items(), key=lambda x: x[1]['max_consecutive_copies'])))
+		f.write("account,\"consecutive copy count\"\n")
+		for i in range(ENTRY_NUM):
+			f.write("{},{}\n".format(max_consecutive_accts[i][0], max_consecutive_accts[i][1]['max_consecutive_copies'])) 
+
+	with open('data/pct-savings.csv', 'w') as f:
+		# contracts with largest percent savings from replacing copy-loops with MCOPY
+		max_savings = sorted(result.items(), key=lambda x: (x[1]['gas_used'] - x[1]['gas_used_mcopy']) / x[1]['gas_used'])
+
+		f.write("account,\"aggregate savings with mcopy\"\n")
+		for i in range(ENTRY_NUM):
+			entry = max_savings[len(max_savings) - i - 1]
+			pct_savings = ((entry[1]['gas_used'] - entry[1]['gas_used_mcopy']) / entry[1]['gas_used'])
+			f.write("{},{}\n".format(max_savings[i][0], pct_savings))
+
+	# MCOPY savings for most popular contracts
+	# not substantial enough to consider
+	# savings_popular = sorted(result.items(), key=lambda x: x[1]['gas_used'])
 
 if __name__ == "__main__":
 	main()
