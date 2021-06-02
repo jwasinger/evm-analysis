@@ -1,35 +1,5 @@
 import sys, json, re, heapq
 
-# return a map of contract_address: (copy count, gas spent), include reverted calls
-# TODO figure out how to make the tracer emit gas spent in each call frame (without including internal calls)
-def parse_contract_copies(tx_trace):
-	result = {}
-	if not 'gasUsed' in tx_trace:
-		return None
-
-	result[tx_trace['to']] = { 'max_consecutive_copies': 0, 'copy_count': len(tx_trace['copies']), 'gas_used': int(tx_trace['gasUsed'], 16)}
-
-	if len(tx_trace['copies']) > 0:
-		result[tx_trace['to']]['max_consecutive_copies'] = measure_consecutive_copies(tx_trace['copies'])
-
-	for call in tx_trace['calls']:
-		if not 'gasUsed' in call and call['output'] == '0x':
-			# call to EOA/non-contract
-			continue
-
-		if call['to'] in result:
-			result[call['to']]['copy_count'] += len(call['memcopyState']['copies'])
-			result[call['to']]['gas_used'] += int(call['gasUsed'], 16)
-		else:
-			result[call['to']] = {'copy_count': len(call['memcopyState']['copies']), 'gas_used': int(call['gasUsed'], 16), 'max_consecutive_copies': 0}
-
-		if len(call['memcopyState']['copies']) > 0:
-			result[call['to']]['max_consecutive_copies'] = measure_consecutive_copies(call['memcopyState']['copies'])
-
-		result[call['from']]['gas_used'] -= int(call['gasUsed'], 16)
-		assert result[call['from']]['gas_used'] >= 0, "whoops"
-
-	return result
 
 def bulk_copy_bounds_check(start_src, start_dst, consec_count, next_src, next_dst):
 	if next_src == start_src + consec_count * 32 and next_dst == start_dst + consec_count * 32:
@@ -65,6 +35,59 @@ def measure_consecutive_copies(call_copies):
 	max_consecutive = max(cur_consecutive, max_consecutive)
 
 	return max_consecutive
+
+# traverse the callgraph removing the cost of calling child contracts from parent gasUsed
+# we need the aggregate gas spent in each contract (which doesn't include the cost of subcalls, other than cost of CALL itself)
+# ---
+# modifies tx_trace in-place
+def trim_subcall_costs(tx_trace):
+	if not 'gasUsed' in tx_trace:
+		return 0
+
+	if not 'calls' in tx_trace:
+		# base case
+		return int(tx_trace['gasUsed'], 16)
+	else:
+		call_gas_used = int(tx_trace['gasUsed'], 16)
+		original_call_gas_used = call_gas_used
+
+		for subcall in tx_trace['calls']:
+			call_gas_used -= trim_subcall_costs(subcall)
+
+		tx_trace['gasUsed'] = hex(call_gas_used)
+		return call_gas_used
+
+def aggregate_mcopy_savings(tx_trace):
+
+	# return [{account: (gas_used, gas_used_mcopy, consecutive_copies), ...]
+	if not 'gasUsed' in tx_trace:
+		return []
+
+	if not 'calls' in tx_trace:
+		gas_used = tx_trace['gasUsed']
+		gas_used_mcopy = gas_used
+		
+		copies = tx_trace['memcopyState']['copies']
+		if len(copies) > 0:
+			gas_used_mcopy = estimate_mcopy_savings(copies)
+
+		return [{'account': tx_trace['to'], 'gas_used': gas_used, 'gas_used_mcopy': gas_used_mcopy, 'copies': copies}]
+	else:
+		result = []
+		for subcall in tx_trace['calls']:
+			result += aggregate_mcopy_savings(subcall)
+
+		return result
+
+# return a map of contract_address: (copy count, gas spent), include reverted calls
+# TODO figure out how to make the tracer emit gas spent in each call frame (without including internal calls)
+def parse_contract_copies(tx_trace):
+	trim_subcall_costs(tx_trace)
+
+	# TODO sanity check which sums up call costs and makes sure that they sum up to the original "un-trimmed" trace
+
+	savings = aggregate_mcopy_savings(tx_trace)
+	import pdb; pdb.set_trace()
 
 def main():
 	trace_file = sys.argv[1]
