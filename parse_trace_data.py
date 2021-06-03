@@ -130,6 +130,9 @@ def main():
 
 	result = {}
 
+	copy_size_occurances = {}
+	total_gas_used = 0
+
 	i = 0
 	tx = None
 	while i < len(trace_lines):
@@ -145,11 +148,28 @@ def main():
 				i += 1
 			elif trace_lines[i + 1].startswith("{"):
 				trace_result = json.loads(trace_lines[i + 1].replace("'", '"').replace('None', '"None"'))
+				if 'gasUsed' in trace_result:
+					total_gas_used += int(trace_result['gasUsed'], 16)
+
 				copies = parse_contract_copies(trace_result)
 				for acct in copies:
 					consecutive_copies = acct['consecutive_copies']
 					if len(consecutive_copies) == 0:
 						consecutive_copies = [0]
+
+					for copy_size in consecutive_copies:
+						if copy_size == 0:
+							continue
+
+						if copy_size in copy_size_occurances:
+							copy_size_occurances[copy_size] += 1
+						else:
+							copy_size_occurances[copy_size] = 1
+
+					if len(consecutive_copies) > 0:
+						# import pdb; pdb.set_trace()
+						# continue
+						pass
 
 					if acct['account'] in result:
 						entry = result[acct['account']]
@@ -178,22 +198,20 @@ def main():
 
 	# store data for graphs to csvs:
 
-	# contracts with largest consecutive copy sizes
-	with open('data/consecutive.csv', 'w') as f:
-		max_consecutive_accts = list(reversed(sorted(result.items(), key=lambda x: x[1]['max_consecutive_copies'])))
-		f.write("account,\"consecutive copy count\"\n")
-		for i in range(ENTRY_NUM):
-			f.write("{},{}\n".format(max_consecutive_accts[i][0], max_consecutive_accts[i][1]['max_consecutive_copies'])) 
+	with open('data/guzzlers.csv', 'w') as f:
+		# pct savings for contracts with most gas usage
+		max_savings = sorted(result.items(), key=lambda x: x[1]['gas_used'])
 
-	with open('data/pct-savings.csv', 'w') as f:
-		# contracts with largest percent savings from replacing copy-loops with MCOPY
-		max_savings = sorted(result.items(), key=lambda x: (x[1]['gas_used'] - x[1]['gas_used_mcopy']) / x[1]['gas_used'])
-
-		f.write("account,\"aggregate savings with mcopy\"\n")
+		f.write("account,\"aggregate percentage savings for most popular contracts with mcopy\"\n")
 		for i in range(ENTRY_NUM):
 			entry = max_savings[len(max_savings) - i - 1]
 			pct_savings = ((entry[1]['gas_used'] - entry[1]['gas_used_mcopy']) / entry[1]['gas_used'])
 			f.write("{},{}\n".format(max_savings[i][0], pct_savings))
+
+	with open('data/copy-size-distribution.csv', 'w') as f:
+		f.write("\"copy size (32 bytes)\",\"number of occurances\"\n")
+		for copy_size, num in sorted(copy_size_occurances.items(), key=lambda x: x[0]):
+			f.write("{},{}\n".format(copy_size, num))
 
 	# MCOPY savings for most popular contracts
 	# not substantial enough to consider
