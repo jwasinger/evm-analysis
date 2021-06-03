@@ -205,7 +205,7 @@ def main():
 		f.write("account,\"aggregate percentage savings for most popular contracts with mcopy\"\n")
 		for i in range(ENTRY_NUM):
 			entry = max_savings[len(max_savings) - i - 1]
-			pct_savings = ((entry[1]['gas_used'] - entry[1]['gas_used_mcopy']) / entry[1]['gas_used'])
+			pct_savings = 100 * ((entry[1]['gas_used'] - entry[1]['gas_used_mcopy']) / entry[1]['gas_used'])
 			f.write("{},{}\n".format(max_savings[i][0], pct_savings))
 
 	with open('data/copy-size-distribution.csv', 'w') as f:
