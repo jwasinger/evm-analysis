@@ -196,6 +196,8 @@ def main():
 
 	ENTRY_NUM=5
 
+	import pdb; pdb.set_trace()
+
 	# store data for graphs to csvs:
 
 	with open('data/guzzlers.csv', 'w') as f:
