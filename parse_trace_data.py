@@ -166,11 +166,6 @@ def main():
 						else:
 							copy_size_occurances[copy_size] = 1
 
-					if len(consecutive_copies) > 0:
-						# import pdb; pdb.set_trace()
-						# continue
-						pass
-
 					if acct['account'] in result:
 						entry = result[acct['account']]
 						entry['gas_used'] += acct['gas_used']
@@ -196,8 +191,6 @@ def main():
 
 	ENTRY_NUM=5
 
-	import pdb; pdb.set_trace()
-
 	# store data for graphs to csvs:
 
 	with open('data/guzzlers.csv', 'w') as f:
@@ -208,7 +201,7 @@ def main():
 		for i in range(ENTRY_NUM):
 			entry = max_savings[len(max_savings) - i - 1]
 			pct_savings = 100 * ((entry[1]['gas_used'] - entry[1]['gas_used_mcopy']) / entry[1]['gas_used'])
-			f.write("{},{}\n".format(max_savings[i][0], pct_savings))
+			f.write("{},{}\n".format(max_savings[len(max_savings) - i - 1][0], pct_savings))
 
 	with open('data/copy-size-distribution.csv', 'w') as f:
 		f.write("\"copy size (32 bytes)\",\"number of occurances\"\n")
