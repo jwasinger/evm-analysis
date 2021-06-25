@@ -39,6 +39,28 @@ class EthRPCClient:
         result = json.loads(result)
         return result['result']
 
+    async def debugAccountRangeAt(self, startHash, count) -> ([(str, bool)], str):
+        payload = {
+            'method': 'debug_accountRange',
+            'params': ["latest", startHash, count, True, True, True],
+            'jsonrpc': '2.0',
+            "id": 0,
+        }
+        await self.websocket.send(json.dumps(payload))
+        result = await asyncio.wait_for(self.websocket.recv(), timeout=60)
+        result = json.loads(result)['result']
+
+        zeroCodeHash = 'c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'
+        result_accounts = []
+
+        for address, account in zip(result['accounts'].keys(), result['accounts'].values()):
+            result_accounts.append((address, account['codeHash'] != zeroCodeHash))
+
+        if not 'next' in result:
+            return (result_accounts, None)
+        else:
+            return (result_accounts, result['next'])
+
     async def debugTraceTransaction(self, tx_hash, tracer_script=None):
         payload = None
 
@@ -68,6 +90,5 @@ class EthRPCClient:
 
         if not 'result' in result:
             return None
-
         return result['result']
 
