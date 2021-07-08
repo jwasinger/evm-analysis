@@ -10,7 +10,6 @@ from eth_jsonrpc_http import EthRPCClient
 async def main():
     uri = "http://localhost:8545"
 
-    accounts = []
     rpcClient = EthRPCClient(uri)
     with rpcClient:
         nxt = '0x00'
@@ -18,7 +17,7 @@ async def main():
                 result = None
                 result = rpcClient.debugAccountRange(nxt, 128)
 
-                accounts += result[0]
+                accounts = result[0]
                 for (account, hasCode) in accounts:
                     print(account + "," + str(int(hasCode)))
 
