@@ -8,7 +8,7 @@ class EthRPCClient:
         self.session = requests.Session()
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        pass
+        self.session.close()
 
     def debugAccountRange(self, startHash, count) -> ([(str, bool)], str):
         payload = {
@@ -31,3 +31,15 @@ class EthRPCClient:
             return (result_accounts, None)
         else:
             return (result_accounts, result['next'])
+
+    def ethGetCode(self, address) -> ([(str, bool)], str):
+        payload = {
+            'method': 'eth_getCode',
+            'params': [address, "latest"],
+            'jsonrpc': '2.0',
+            "id": 0,
+        }
+
+        response = self.session.post(self.rpcEndpoint, json=payload)
+        result = response.json()['result']
+        return result
