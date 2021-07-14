@@ -23,14 +23,17 @@ with open(input_file) as f:
 
 		if prefix != cur_prefix:
 			cur_prefix = prefix
-			print(cur_prefix)
+			#print(cur_prefix)
 			if len(cur_possible_vals) != 0:
-				import pdb; pdb.set_trace()
-				found_shortest_prefixes += list(cur_possible_vals)
+				# found_shortest_prefixes += list(cur_possible_vals)
+				for item in list(cur_possible_vals):
+					item_str = hex(item)[2:]
+					if len(item_str) != 2:
+						item_str = '0' + item_str
+					print(cur_prefix + item_str)
 
 			cur_possible_vals = set(range(255))
 
 		if int(val, 16) in cur_possible_vals:
 			cur_possible_vals.remove(int(val, 16))
 
-import pdb; pdb.set_trace()
